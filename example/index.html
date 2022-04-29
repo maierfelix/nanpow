@@ -1,0 +1,15 @@
+<script type="text/javascript" src="https://unpkg.com/banotils/dist/index.iife.min.js"></script>
+<script type="text/javascript" src="../dist/index.iife.min.js"></script>
+
+<script>
+
+(async() => {
+
+  const hash = banotils.hexToBytes(`8711A7FCA0F2CDBBA739FBB7948C9AEFCA509931A50EC0922FF0DC3737708E93`);
+  console.log("Hash:", hash);
+  const work = await nanpow.getWork(hash);
+  console.log("Work:", work);
+
+})();
+
+</script>
