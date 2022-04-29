@@ -1,5 +1,7 @@
 import {decodeWasmModule} from "./utils";
 
+import CrossWorker from "./polyfills/worker";
+
 // @ts-ignore
 import powC from "c:./pow.c";
 
@@ -19,7 +21,7 @@ const THREAD_ACTION_UPDATE_DONE = 3;
  */
 interface IThread {
   id: number;
-  worker: Worker;
+  worker: CrossWorker;
 }
 
 /**
@@ -68,6 +70,34 @@ function bytesToHex(bytes: Uint8Array): string {
  */
 const WORKER_CODE = function(): void {
 
+  /**
+   * Thread action messages
+   */
+  const THREAD_ACTION_INIT = 0;
+  const THREAD_ACTION_INIT_DONE = 1;
+  const THREAD_ACTION_UPDATE = 2;
+  const THREAD_ACTION_UPDATE_DONE = 3;
+
+  let ctx: any = null;
+  // @ts-ignore
+  if (typeof WorkerGlobalScope !== "undefined") {
+    // Running inside browser
+    ctx = self;
+  } else {
+    // Running inside node
+    const {parentPort} = require("worker_threads");
+    // Bridge calls to match web worker API
+    ctx = {};
+    ctx.postMessage = (e: any): void => {
+      parentPort.postMessage(e);
+    };
+    ctx.addEventListener = function(_type: string, callback: any): void {
+      parentPort.on("message", (e: any) => {
+        callback({data: e});
+      });
+    };
+  }
+
   function arrayHex(arr: Uint8Array, length: number): string {
     let out = "";
     for (let i = length - 1; i > -1; i--) {
@@ -96,7 +126,7 @@ const WORKER_CODE = function(): void {
   // Global webassembly properties
   let exports: any = null;
   // Handle incoming messages from the main thread
-  self.addEventListener("message", (e: MessageEvent): void => {
+  ctx.addEventListener("message", (e: MessageEvent): void => {
     const {data} = e;
     // Initialization message
     if (data.action === THREAD_ACTION_INIT) {
@@ -109,7 +139,7 @@ const WORKER_CODE = function(): void {
         }};
         const wasm = await WebAssembly.instantiate(packet.module, imports);
         exports = (wasm.exports as any);
-        self.postMessage({action: THREAD_ACTION_INIT_DONE});
+        ctx.postMessage({action: THREAD_ACTION_INIT_DONE});
       })();
     }
     // Update message
@@ -138,9 +168,10 @@ const WORKER_CODE = function(): void {
         const hexB = arrayHex(result, 4);
         hash = hexToBytes(hexA + hexB);
       }
-      self.postMessage({action: THREAD_ACTION_UPDATE_DONE, data: hash});
+      ctx.postMessage({action: THREAD_ACTION_UPDATE_DONE, data: hash});
     }
   });
+
 }.toString();
 
 const MAX_WORKER_COUNT = 16;
@@ -155,13 +186,10 @@ async function create(): Promise<void> {
     memory,
   }};
   module = await WebAssembly.instantiate(POW_CODE, imports);
-  // Create worker blob
-  const workerBlob = new Blob([`(${WORKER_CODE})();`], {type: "text/javascript"});
-  const workerBlobURL = window.URL.createObjectURL(workerBlob);
   // Create threads
   for (let ii = 0; ii < MAX_WORKER_COUNT; ++ii) {
     const threadId = ii;
-    const worker = new Worker(workerBlobURL);
+    const worker = new CrossWorker(`(${WORKER_CODE})();`);
     threads.push({id: threadId, worker});
   }
   return new Promise(resolve => {
@@ -178,7 +206,7 @@ async function create(): Promise<void> {
       // Clear previous thread message listener
       thread.worker.onmessage = null;
       // Create new thread message listener
-      thread.worker.onmessage = (e): any => {
+      thread.worker.onmessage = (e: any): void => {
         const {data} = e;
         const packet = data as IThreadMessage;
         // Thread notified that the initialization is done
@@ -219,8 +247,18 @@ export async function getWork(hash: Uint8Array): Promise<Uint8Array> {
   // Run until match
   return new Promise(resolve => {
     setTimeout(function updateLoop() {
-      const work0 = crypto.getRandomValues(new Uint8Array(4));
-      const work1 = crypto.getRandomValues(new Uint8Array(4));
+      const work0 = new Uint8Array([
+        (Math.random() * 0xFF) | 0,
+        (Math.random() * 0xFF) | 0,
+        (Math.random() * 0xFF) | 0,
+        (Math.random() * 0xFF) | 0,
+      ]);
+      const work1 = new Uint8Array([
+        (Math.random() * 0xFF) | 0,
+        (Math.random() * 0xFF) | 0,
+        (Math.random() * 0xFF) | 0,
+        (Math.random() * 0xFF) | 0,
+      ]);
       let isResolved = false;
       let threadUpdateCounter = 0;
       for (let yy = 0; yy < 4; ++yy) {
@@ -228,7 +266,7 @@ export async function getWork(hash: Uint8Array): Promise<Uint8Array> {
           const bx = xx;
           const by = yy;
           const {worker} = threads[(by * 4) + bx];
-          worker.onmessage = (e): any => {
+          worker.onmessage = (e: any): void => {
             const {data} = e;
             const packet = data as IThreadMessage;
             // Thread notified that the work is done

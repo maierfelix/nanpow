@@ -43,7 +43,10 @@ export default [
         tsconfig: "./tsconfig.json",
         module: "esnext"
       }),
-      resolve(),
+      resolve({
+        preferBuiltins: true,
+        browser: false,
+      }),
       commonjs({
         sourceMap: false,
         include: "node_modules/**"
