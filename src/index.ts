@@ -44,6 +44,7 @@ interface IThreadInitMessage extends IThreadMessage {
  * Interface representing a thread update message
  */
 interface IThreadUpdateMessage extends IThreadMessage {
+  difficulty: number;
   work0: Uint8Array;
   work1: Uint8Array;
   hash0: Uint8Array;
@@ -145,10 +146,11 @@ const WORKER_CODE = function(): void {
     // Update message
     else if (data.action === THREAD_ACTION_UPDATE) {
       const packet = data as IThreadUpdateMessage;
-      const {hash0, hash1, work0, work1, blockOffsetX, blockOffsetY, blockSize} = packet;
+      const {difficulty, hash0, hash1, work0, work1, blockOffsetX, blockOffsetY, blockSize} = packet;
       const resultU32 = exports.Calculate(
         blockOffsetX, blockOffsetY,
         blockSize,
+        difficulty,
         work0[0], work0[1], work0[2], work0[3],
         work1[0], work1[1], work1[2], work1[3],
         hash0[0], hash0[1], hash0[2], hash0[3],
@@ -224,7 +226,12 @@ async function create(): Promise<void> {
 
 const BLOCK_SIZE = 256;
 
-export async function getWork(hash: Uint8Array): Promise<Uint8Array> {
+/**
+ * Calculates PoW based on the provided hash and difficulty
+ * @param hash - The hash to calculate PoW for
+ * @param difficulty - The difficulty of the PoW to calculate for
+ */
+export async function getWork(hash: Uint8Array, difficulty: number): Promise<Uint8Array> {
   // If module isn't created yet, then create it first
   if (module === null) await create();
 
@@ -291,6 +298,7 @@ export async function getWork(hash: Uint8Array): Promise<Uint8Array> {
           };
           const packet: IThreadUpdateMessage = {
             action: THREAD_ACTION_UPDATE,
+            difficulty: difficulty,
             hash0: hash0 as any,
             hash1: hash1 as any,
             work0: work0,

@@ -93,6 +93,7 @@ void B2B_G(int32_t a, int32_t b, int32_t c, int32_t d, int32_t ix, int32_t iy) {
 ATTRIBUTE_EXPORT uint32_t Calculate(
   uint32_t uBlockOffsetX, uint32_t uBlockOffsetY,
   uint32_t uBlockSize,
+  uint32_t uDifficulty,
   uint32_t uWork0r, uint32_t uWork0g, uint32_t uWork0b, uint32_t uWork0a,
   uint32_t uWork1r, uint32_t uWork1g, uint32_t uWork1b, uint32_t uWork1a,
   uint32_t uHash0r, uint32_t uHash0g, uint32_t uHash0b, uint32_t uHash0a,
@@ -143,7 +144,7 @@ ATTRIBUTE_EXPORT uint32_t Calculate(
         B2B_G(6, 8, 18, 28,  SIGMA82[ii * 16 + 14], SIGMA82[ii * 16 + 15]);
       }
 
-      if ((0x6A09E667u ^ v[1] ^ v[17]) > 0xFFFFFE00u) {
+      if ((0x6A09E667u ^ v[1] ^ v[17]) > uDifficulty) {
         return RGBA8ToUint32(x_index + 1u, y_index + 1u, x_pos, y_pos);
       }
 
