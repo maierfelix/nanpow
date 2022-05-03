@@ -5,6 +5,8 @@ import CrossWorker from "./polyfills/worker";
 // @ts-ignore
 import powC from "c:./pow.c";
 
+import crypto from "./polyfills/crypto";
+
 // Pre-decode simulation wasm code
 const POW_CODE = decodeWasmModule(powC);
 
@@ -224,14 +226,17 @@ async function create(): Promise<void> {
   });
 }
 
-const BLOCK_SIZE = 256;
+const BLOCK_SIZE = 128;
+const THREAD_DIMENSION = 4;
 
 /**
  * Calculates PoW based on the provided hash and difficulty
  * @param hash - The hash to calculate PoW for
  * @param difficulty - The difficulty of the PoW to calculate for
+ * @param blockSize - Optional custom block size to use
+ * @param threadDimension - Optional custom thread dimension to use
  */
-export async function getWork(hash: Uint8Array, difficulty: number): Promise<Uint8Array> {
+export async function getWork(hash: Uint8Array, difficulty: number, blockSize: number = BLOCK_SIZE, threadDimension: number = THREAD_DIMENSION): Promise<Uint8Array> {
   // If module isn't created yet, then create it first
   if (module === null) await create();
 
@@ -254,25 +259,15 @@ export async function getWork(hash: Uint8Array, difficulty: number): Promise<Uin
   // Run until match
   return new Promise(resolve => {
     setTimeout(function updateLoop() {
-      const work0 = new Uint8Array([
-        (Math.random() * 0xFF) | 0,
-        (Math.random() * 0xFF) | 0,
-        (Math.random() * 0xFF) | 0,
-        (Math.random() * 0xFF) | 0,
-      ]);
-      const work1 = new Uint8Array([
-        (Math.random() * 0xFF) | 0,
-        (Math.random() * 0xFF) | 0,
-        (Math.random() * 0xFF) | 0,
-        (Math.random() * 0xFF) | 0,
-      ]);
+      const work0 = crypto.getRandomValues(new Uint8Array(4));
+      const work1 = crypto.getRandomValues(new Uint8Array(4));
       let isResolved = false;
       let threadUpdateCounter = 0;
-      for (let yy = 0; yy < 4; ++yy) {
-        for (let xx = 0; xx < 4; ++xx) {
+      for (let yy = 0; yy < threadDimension; ++yy) {
+        for (let xx = 0; xx < threadDimension; ++xx) {
           const bx = xx;
           const by = yy;
-          const {worker} = threads[(by * 4) + bx];
+          const {worker} = threads[(by * threadDimension) + bx];
           worker.onmessage = (e: any): void => {
             const {data} = e;
             const packet = data as IThreadMessage;

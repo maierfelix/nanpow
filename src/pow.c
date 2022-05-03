@@ -116,7 +116,7 @@ ATTRIBUTE_EXPORT uint32_t Calculate(
       uint32_t y_index = (uv_y - y_pos) / uBlockSize;
 
       #pragma clang loop unroll(full)
-      for (uint32_t ii = 0u; ii < 32u;++ii) {
+      for (uint8_t ii = 0u; ii < 32u;++ii) {
         v[ii] = vb[ii];
       }
 
